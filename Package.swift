@@ -7,7 +7,10 @@ let package = Package(
   platforms: [
     .macOS(.v26)
   ],
-  products: [.executable(name: "CloudFlareUpdater", targets: ["CloudFlareUpdater"])],
+  products: [
+    .executable(name: "CloudFlareUpdater", targets: ["CloudFlareUpdater"]),
+    .executable(name: "CreateCNAMERecord", targets: ["CreateCNAMERecord"])
+  ],
   dependencies: [
     .package(
       url: "https://github.com/apple/swift-argument-parser.git",
@@ -25,6 +28,15 @@ let package = Package(
   targets: [
     .executableTarget(
       name: "CloudFlareUpdater",
+      dependencies: [
+        .product(name: "AsyncHTTPClient", package: "async-http-client"),
+        .product(name: "ArgumentParser", package: "swift-argument-parser"),
+        .product(name: "_NIOFileSystem", package: "swift-nio"),
+        .product(name: "Subprocess", package: "swift-subprocess"),
+      ]
+    ),
+    .executableTarget(
+      name: "CreateCNAMERecord",
       dependencies: [
         .product(name: "AsyncHTTPClient", package: "async-http-client"),
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
