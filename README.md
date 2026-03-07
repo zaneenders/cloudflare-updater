@@ -29,3 +29,17 @@ swift run CloudFlareUpdater --zone-id <zone-id> --site example.com --email your@
 3. Creates the record if it doesn't exist, or updates it if the IP has changed
 4. Logs all operations to `Logs/dns.log`
 
+## Documentation
+
+Preview the documentation locally using DocC:
+
+```console
+# Preview CloudFlareUpdater documentation
+docc preview Sources/CloudFlareUpdater/CloudFlareUpdater.docc
+
+# Preview CreateCNAMERecord documentation  
+docc preview Sources/CreateCNAMERecord/CreateCNAMERecord.docc
+```
+
+The preview server will start and you can view the documentation in your browser.
+
