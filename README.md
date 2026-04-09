@@ -1,45 +1,64 @@
-# CloudFlareUpdater
+# cloudflare-updater
 
-A Swift command-line tool to update [CloudFlare DNS records](https://developers.cloudflare.com/api/resources/dns/subresources/records/methods/list/) (A and AAAA) based on your current public IP address.
+Swift CLIs for **Cloudflare DNS** when your origin has a **dynamic public IPv4**.
 
-## Features
+## Products
 
-- Automatically detects IPv4 or IPv6 and updates the appropriate DNS record
-- Creates DNS records if they don't exist
-- Supports both command-line arguments and environment variables
-- Logs operations to files
+| Binary | Purpose |
+|--------|---------|
+| **`CloudFlareUpdater`** | Reads current public IPv4, then **creates or updates** the zone **A** record for **`--site`** (e.g. apex **`shapetree.org`**). Intended for a **systemd timer** every minute. |
+| **`CreateCNAMERecord`** | **Creates or fixes** a **CNAME**: **`--site`** (FQDN, e.g. **`api.shapetree.org`**) → **`--target`** (apex, e.g. **`shapetree.org`**). Idempotent: skips if correct, **PATCH**es if the target is wrong. Run **once** (or occasionally) — not on the same timer as the A record. |
 
-## Usage
+Together: **A** on the apex follows the server IP; **CNAME**s to the apex follow automatically.
 
-```console
-swift run CloudFlareUpdater --zone-id <zone-id> --site example.com --email your@email.com --api-key <api-key>
+## Build
+
+```bash
+swift build -c release --product CloudFlareUpdater
+swift build -c release --product CreateCNAMERecord
 ```
 
-## Options
+## CloudFlareUpdater
 
-- `--zone-id`: CloudFlare Zone ID
-- `--site`: Domain name to update
-- `--email`: CloudFlare account email
-- `--api-key`: CloudFlare Global API Key
+```bash
+CloudFlareUpdater --zone-id ZONE_ID --site shapetree.org --email you@example.com --api-key GLOBAL_API_KEY
+```
 
-## How it Works
+Logs: **`Logs/dns.log`** (cwd-relative). State files: **`Logs/ip4.txt`**, etc.
 
-1. Fetches your current public IP from CloudFlare's trace endpoint
-2. Checks if an A or AAAA record exists for the site
-3. Creates the record if it doesn't exist, or updates it if the IP has changed
-4. Logs all operations to `Logs/dns.log`
+## CreateCNAMERecord
 
-## Documentation
+**`api`** for server-tower / Caddy:
 
-Preview the documentation locally using DocC:
+```bash
+CreateCNAMERecord \
+  --zone-id ZONE_ID \
+  --site api.shapetree.org \
+  --target shapetree.org \
+  --email you@example.com \
+  --api-key GLOBAL_API_KEY
+```
 
-```console
-# Preview CloudFlareUpdater documentation
+**`www`** (if you want the tool to manage it instead of the dashboard):
+
+```bash
+CreateCNAMERecord \
+  --zone-id ZONE_ID \
+  --site www.shapetree.org \
+  --target shapetree.org \
+  --email you@example.com \
+  --api-key GLOBAL_API_KEY
+```
+
+Same options via env: **`CLOUDFLARE_ZONE_ID`**, **`CLOUDFLARE_SITE`**, **`CLOUDFLARE_CNAME_TARGET`**, **`CLOUDFLARE_EMAIL`**, **`CLOUDFLARE_API_KEY`**.
+
+Logs: **`Logs/cname.log`**.
+
+More context: **[CNAME_SETUP.md](./CNAME_SETUP.md)**.
+
+## DocC
+
+```bash
 docc preview Sources/CloudFlareUpdater/CloudFlareUpdater.docc
-
-# Preview CreateCNAMERecord documentation  
 docc preview Sources/CreateCNAMERecord/CreateCNAMERecord.docc
 ```
-
-The preview server will start and you can view the documentation in your browser.
-

@@ -14,8 +14,13 @@ struct CloudFlareAPI {
     self.logFile = logFile
   }
 
-  func getRecordID(type: String, name: String, zoneID: String) async -> String? {
-    let url = "https://api.cloudflare.com/client/v4/zones/\(zoneID)/dns_records?type=\(type)&name=\(name)"
+  /// Returns record id and content when exactly one DNS record matches.
+  func findRecord(type: String, name: String, zoneID: String) async -> (id: String, content: String)? {
+    guard let encodedName = name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+      return nil
+    }
+    let url =
+      "https://api.cloudflare.com/client/v4/zones/\(zoneID)/dns_records?type=\(type)&name=\(encodedName)"
     var req = HTTPClientRequest(url: url)
     req.method = .GET
     req.headers.add(name: "X-Auth-Email", value: email)
@@ -31,11 +36,11 @@ struct CloudFlareAPI {
         return nil
       }
       let cfResponse = try JSONDecoder().decode(CloudFlareResponse.self, from: buffer)
-      if cfResponse.result.count == 1 {
-        return cfResponse.result[0].id
-      }
+      guard cfResponse.result.count == 1 else { return nil }
+      let row = cfResponse.result[0]
+      return (row.id, row.content ?? "")
     } catch {
-      try? await "Error getting record ID: \(error.localizedDescription)\n".append(toFileAt: logFile)
+      try? await "Error finding record: \(error.localizedDescription)\n".append(toFileAt: logFile)
     }
     return nil
   }
@@ -74,5 +79,40 @@ struct CloudFlareAPI {
       try? await "Error creating record: \(error.localizedDescription)\n".append(toFileAt: logFile)
     }
     return nil
+  }
+
+  func updateRecord(recordID: String, type: String, name: String, content: String, zoneID: String) async {
+    let url = "https://api.cloudflare.com/client/v4/zones/\(zoneID)/dns_records/\(recordID)"
+    var req = HTTPClientRequest(url: url)
+    req.method = .PATCH
+    req.headers.add(name: "X-Auth-Email", value: email)
+    req.headers.add(name: "X-Auth-Key", value: apiKey)
+    req.headers.add(name: "Content-Type", value: "application/json")
+
+    struct RecordUpdate: Codable {
+      let type, name, content: String
+      let ttl: Int
+      let proxied: Bool
+    }
+
+    do {
+      let data = try JSONEncoder().encode(
+        RecordUpdate(type: type, name: name, content: content, ttl: 3600, proxied: false))
+      req.body = .bytes(ByteBuffer(bytes: data))
+      let rsp = try await HTTPClient.shared.execute(req, timeout: .seconds(3))
+      let buffer = try await rsp.body.collect(upTo: 1 * 1024 * 1024)
+      if rsp.status == .ok {
+        let cfResponse = try JSONDecoder().decode(CloudFlareUpdateResponse.self, from: buffer)
+        if cfResponse.success {
+          try? await "Updated \(type) \(name) -> \(content): \(Date())\n".append(toFileAt: logFile)
+        } else {
+          try? await "Update failed: \(String(buffer: buffer))\n".append(toFileAt: logFile)
+        }
+      } else {
+        try? await "\(rsp.status): \(String(buffer: buffer))\n".append(toFileAt: logFile)
+      }
+    } catch {
+      try? await "Error updating record: \(error.localizedDescription)\n".append(toFileAt: logFile)
+    }
   }
 }
