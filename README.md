@@ -24,7 +24,9 @@ swift build -c release --product CreateCNAMERecord
 CloudFlareUpdater --zone-id ZONE_ID --site shapetree.org --email you@example.com --api-key GLOBAL_API_KEY
 ```
 
-Logs: **`Logs/dns.log`** (cwd-relative). State files: **`Logs/ip4.txt`**, etc.
+Logs: **`Logs/dns.log`** (cwd-relative). State files: **`Logs/ip4.txt`**, etc. **`journalctl`** usually only shows Swift’s **`errno=13`** thread-priority noise; **API and IP errors are in `dns.log`**, not the journal.
+
+**Public IPv4 discovery** uses **`curl -4`** against **`CLOUDFLARE_PUBLIC_IP_URL`** if set, otherwise **`https://api.ipify.org`** (plain body = IP). Do not default to your own apex hostname before DNS points at this box, or updates never run.
 
 ## CreateCNAMERecord
 

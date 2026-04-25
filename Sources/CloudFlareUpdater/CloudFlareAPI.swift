@@ -113,7 +113,10 @@ struct CloudFlareAPI {
   }
 
   func getIP(version: Int) async -> String? {
-    let url = "https://zaneenders.com/ip"
+    // Default must not depend on the same DNS name this tool updates (bootstrap / chicken-and-egg).
+    // Optional override, e.g. https://zaneenders.com/ip once the site and /ip route are live.
+    let url =
+      ProcessInfo.processInfo.environment["CLOUDFLARE_PUBLIC_IP_URL"] ?? "https://api.ipify.org"
     do {
       let result = try await run(.path("/usr/bin/curl"), arguments: ["-4", url], output: .data(limit: 4096))
       if case .exited(let code) = result.terminationStatus, code == 0 {
