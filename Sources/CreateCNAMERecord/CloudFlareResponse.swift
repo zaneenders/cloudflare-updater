@@ -5,6 +5,8 @@ struct CloudFlareResponse: Codable {
 
   struct DNSRecord: Codable {
     let id: String
+    let type: String?
+    let name: String?
     /// Present on list responses; used to detect wrong CNAME targets.
     let content: String?
   }

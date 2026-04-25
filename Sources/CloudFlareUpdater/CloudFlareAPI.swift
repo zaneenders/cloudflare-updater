@@ -1,4 +1,5 @@
 import AsyncHTTPClient
+import CloudflareLogging
 import Foundation
 import NIOCore
 import NIOFileSystem
@@ -27,8 +28,8 @@ struct CloudFlareAPI {
       let rsp = try await HTTPClient.shared.execute(req, timeout: .seconds(3))
       let buffer = try await rsp.body.collect(upTo: 1 * 1024 * 1024)
       if rsp.status != .ok {
-        try? await "\(rsp.status): \(Date())\n".append(toFileAt: logFile)
-        try? await "\(String(buffer: buffer))\n".append(toFileAt: logFile)
+        await LogLine.append("\(rsp.status): \(Date())\n", to: logFile)
+        await LogLine.append("\(String(buffer: buffer))\n", to: logFile)
         return nil
       }
       let cfResponse = try JSONDecoder().decode(CloudFlareResponse.self, from: buffer)
@@ -36,7 +37,7 @@ struct CloudFlareAPI {
         return cfResponse.result[0].id
       }
     } catch {
-      try? await "Error getting record ID: \(error.localizedDescription)\n".append(toFileAt: logFile)
+      await LogLine.append("Error getting record ID: \(error.localizedDescription)\n", to: logFile)
     }
     return nil
   }
@@ -64,15 +65,15 @@ struct CloudFlareAPI {
       let rsp = try await HTTPClient.shared.execute(req, timeout: .seconds(3))
       let buffer = try await rsp.body.collect(upTo: 1 * 1024 * 1024)
       if rsp.status == .ok {
-        try? await "record recreated for \(content)\n".append(toFileAt: logFile)
+        await LogLine.append("record recreated for \(content)\n", to: logFile)
         let cfResponse = try JSONDecoder().decode(CloudFlareUpdateResponse.self, from: buffer)
         if cfResponse.success {
           return cfResponse.result.id
         }
       }
-      try? await "\(rsp.status): \(String(buffer: buffer))\n".append(toFileAt: logFile)
+      await LogLine.append("\(rsp.status): \(String(buffer: buffer))\n", to: logFile)
     } catch {
-      try? await "Error creating record: \(error.localizedDescription)\n".append(toFileAt: logFile)
+      await LogLine.append("Error creating record: \(error.localizedDescription)\n", to: logFile)
     }
     return nil
   }
@@ -100,15 +101,15 @@ struct CloudFlareAPI {
       if rsp.status == .ok {
         let cfResponse = try JSONDecoder().decode(CloudFlareUpdateResponse.self, from: buffer)
         if cfResponse.success {
-          try? await "Successfully updated \(type) record: \(Date())\n".append(toFileAt: logFile)
+          await LogLine.append("Successfully updated \(type) record: \(Date())\n", to: logFile)
         } else {
-          try? await "Update failed: \(String(buffer: buffer))\n".append(toFileAt: logFile)
+          await LogLine.append("Update failed: \(String(buffer: buffer))\n", to: logFile)
         }
       } else {
-        try? await "\(rsp.status): \(String(buffer: buffer))\n".append(toFileAt: logFile)
+        await LogLine.append("\(rsp.status): \(String(buffer: buffer))\n", to: logFile)
       }
     } catch {
-      try? await "Error updating record: \(error.localizedDescription)\n".append(toFileAt: logFile)
+      await LogLine.append("Error updating record: \(error.localizedDescription)\n", to: logFile)
     }
   }
 
@@ -133,11 +134,11 @@ struct CloudFlareAPI {
         }
         return nil
       } else {
-        try? await "curl command failed for IPv\(version) with status \(result.terminationStatus)\n".append(
-          toFileAt: logFile)
+        await LogLine.append(
+          "curl command failed for IPv\(version) with status \(result.terminationStatus)\n", to: logFile)
       }
     } catch {
-      try? await "Error getting IPv\(version): \(error.localizedDescription)\n".append(toFileAt: logFile)
+      await LogLine.append("Error getting IPv\(version): \(error.localizedDescription)\n", to: logFile)
     }
     return nil
   }

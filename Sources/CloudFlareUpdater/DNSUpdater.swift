@@ -1,3 +1,4 @@
+import CloudflareLogging
 import Foundation
 import NIOCore
 import NIOFileSystem
@@ -19,11 +20,11 @@ struct DNSUpdater {
     let ip = await api.getIP(version: 4)
     let key = "ipv4"
     guard let newIP = ip else {
-      try? await "Unable to get current \(key.uppercased()) IP: \(Date())\n".append(toFileAt: api.logFile)
+      await LogLine.append("Unable to get current \(key.uppercased()) IP: \(Date())\n", to: api.logFile)
       return
     }
 
-    try? await "new \(key) ip: \(newIP)".append(toFileAt: api.logFile)
+    await LogLine.append("new \(key) ip: \(newIP)\n", to: api.logFile)
 
     let recordType = key == "ipv4" ? "A" : "AAAA"
     let ipFile = key == "ipv4" ? ip4File : ip6File
@@ -33,9 +34,9 @@ struct DNSUpdater {
       recordID = await api.createRecord(
         type: recordType, name: config.site, content: newIP, zoneID: config.zoneID)
       if recordID != nil {
-        try? await "Created new \(recordType) record for \(key): \(Date())\n".append(toFileAt: api.logFile)
+        await LogLine.append("Created new \(recordType) record for \(key): \(Date())\n", to: api.logFile)
       } else {
-        try? await "Failed to create \(recordType) record for \(key): \(Date())\n".append(toFileAt: api.logFile)
+        await LogLine.append("Failed to create \(recordType) record for \(key): \(Date())\n", to: api.logFile)
         return
       }
     }
@@ -46,8 +47,8 @@ struct DNSUpdater {
       let buffer = try await fh.readToEnd(maximumSizeAllowed: .unlimited)
       let oldIP = String(buffer: buffer)
       if oldIP != newIP {
-        try? await "\(key.uppercased()) IP changed from \(oldIP) to \(newIP): \(Date())\n".append(
-          toFileAt: api.logFile)
+        await LogLine.append(
+          "\(key.uppercased()) IP changed from \(oldIP) to \(newIP): \(Date())\n", to: api.logFile)
         // Update the stored IP
         let newBuffer = ByteBuffer(string: newIP)
         try await fh.resize(to: .bytes(Int64(newBuffer.readableBytes)))
@@ -58,7 +59,7 @@ struct DNSUpdater {
       }
       try await fh.close()
     } catch {
-      try? await "Error handling \(key) IP file: \(error.localizedDescription)\n".append(toFileAt: ipLog)
+      await LogLine.append("Error handling \(key) IP file: \(error.localizedDescription)\n", to: ipLog)
     }
   }
 }

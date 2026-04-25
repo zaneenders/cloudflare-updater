@@ -26,9 +26,16 @@ let package = Package(
       from: "0.1.0"),
   ],
   targets: [
+    .target(
+      name: "CloudflareLogging",
+      dependencies: [
+        .product(name: "_NIOFileSystem", package: "swift-nio")
+      ]
+    ),
     .executableTarget(
       name: "CloudFlareUpdater",
       dependencies: [
+        "CloudflareLogging",
         .product(name: "AsyncHTTPClient", package: "async-http-client"),
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
         .product(name: "_NIOFileSystem", package: "swift-nio"),
@@ -38,6 +45,7 @@ let package = Package(
     .executableTarget(
       name: "CreateCNAMERecord",
       dependencies: [
+        "CloudflareLogging",
         .product(name: "AsyncHTTPClient", package: "async-http-client"),
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
         .product(name: "_NIOFileSystem", package: "swift-nio"),

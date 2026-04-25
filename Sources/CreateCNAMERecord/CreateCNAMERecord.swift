@@ -1,5 +1,6 @@
 import ArgumentParser
 import AsyncHTTPClient
+import CloudflareLogging
 import Foundation
 import NIOCore
 import NIOFileSystem
@@ -70,8 +71,8 @@ func ensureCNAMERecord(for config: CloudFlareConfig) async {
   if let existing = await api.findRecord(type: "CNAME", name: config.site, zoneID: config.zoneID) {
     let current = existing.content.trimmingCharacters(in: CharacterSet(charactersIn: "."))
     if current.caseInsensitiveCompare(normalizedTarget) == .orderedSame {
-      print("CNAME OK: \(config.site) -> \(existing.content)")
-      try? await "CNAME unchanged: \(config.site) -> \(existing.content): \(Date())\n".append(toFileAt: logFile)
+      await LogLine.append(
+        "CNAME unchanged: \(config.site) -> \(existing.content): \(Date())\n", to: logFile)
       return
     }
     print("Updating CNAME \(config.site): \(existing.content) -> \(config.target)")
@@ -81,15 +82,44 @@ func ensureCNAMERecord(for config: CloudFlareConfig) async {
     return
   }
 
+  // Cloudflare forbids a CNAME where an A/AAAA already exists for the same name. The dashboard
+  // often creates an A for `api`; we remove only A/AAAA so a CNAME can be created.
+  let atName = await api.listRecordsForName(name: config.site, zoneID: config.zoneID)
+  for row in atName {
+    guard let kind = row.type else { continue }
+    if kind == "CNAME" {
+      // findRecord can miss; still handle target without attempting a duplicate create.
+      let current = (row.content ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "."))
+      if current.caseInsensitiveCompare(normalizedTarget) == .orderedSame {
+        await LogLine.append(
+          "CNAME unchanged: \(config.site) -> \(row.content ?? config.target): \(Date())\n", to: logFile)
+        return
+      }
+      print("Updating CNAME \(config.site): \(row.content ?? "") -> \(config.target)")
+      await api.updateRecord(
+        recordID: row.id, type: "CNAME", name: config.site, content: config.target,
+        zoneID: config.zoneID)
+      return
+    }
+    if kind == "A" || kind == "AAAA" {
+      let msg = "Removing \(kind) for \(config.site) so CNAME can be created (was blocking)"
+      await LogLine.append("\(msg): \(Date())\n", to: logFile)
+      await api.deleteRecord(recordID: row.id, zoneID: config.zoneID)
+      continue
+    }
+    let msg =
+      "Cannot add CNAME: a \(kind) record already exists for \(config.site). Remove it in Cloudflare."
+    await LogLine.append("\(msg) \(Date())\n", to: logFile)
+    return
+  }
+
   print("Creating CNAME: \(config.site) -> \(config.target)")
   if let id = await api.createRecord(
     type: "CNAME", name: config.site, content: config.target, zoneID: config.zoneID)
   {
-    print("Created CNAME record id=\(id)")
-    try? await "Created CNAME \(config.site) -> \(config.target) (id=\(id)): \(Date())\n".append(
-      toFileAt: logFile)
+    await LogLine.append(
+      "Created CNAME \(config.site) -> \(config.target) (id=\(id)): \(Date())\n", to: logFile)
   } else {
-    print("Failed to create CNAME. See Logs/cname.log")
-    try? await "Failed to create CNAME for \(config.site): \(Date())\n".append(toFileAt: logFile)
+    await LogLine.append("Failed to create CNAME for \(config.site): \(Date())\n", to: logFile)
   }
 }

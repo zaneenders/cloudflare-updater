@@ -24,9 +24,9 @@ swift build -c release --product CreateCNAMERecord
 CloudFlareUpdater --zone-id ZONE_ID --site shapetree.org --email you@example.com --api-key GLOBAL_API_KEY
 ```
 
-Logs: **`Logs/dns.log`** (cwd-relative). State files: **`Logs/ip4.txt`**, etc. **`journalctl`** usually only shows Swift’s **`errno=13`** thread-priority noise; **API and IP errors are in `dns.log`**, not the journal.
+Logs: **`Logs/dns.log`** (cwd-relative). State files: **`Logs/ip4.txt`**, etc. Each log line is also printed to **stdout** so **systemd** captures the same text under **`journalctl -u cloudflare-updater.service`**. Swift may still emit harmless **`errno=13`** thread-priority lines to **stderr** in the journal.
 
-**Public IPv4 discovery** uses **`curl -4`** against **`CLOUDFLARE_PUBLIC_IP_URL`** if set, otherwise **`https://api.ipify.org`** (plain body = IP). Do not default to your own apex hostname before DNS points at this box, or updates never run.
+**Public IPv4 discovery** uses **`curl -4`** against **`CLOUDFLARE_PUBLIC_IP_URL`** if set, otherwise **`https://api.ipify.org`** (plain body = IP). Do not default to your own apex hostname before DNS points at this box, or updates never run. If you see **`curl command failed … exited(6)`** in **`dns.log`**, **`curl`’s exit 6** is **“Could not resolve host”** (DNS to that URL failed); check resolver/network or try **`curl -4 -sS https://api.ipify.org`** on the host.
 
 ## CreateCNAMERecord
 
@@ -54,7 +54,7 @@ CreateCNAMERecord \
 
 Same options via env: **`CLOUDFLARE_ZONE_ID`**, **`CLOUDFLARE_SITE`**, **`CLOUDFLARE_CNAME_TARGET`**, **`CLOUDFLARE_EMAIL`**, **`CLOUDFLARE_API_KEY`**.
 
-Logs: **`Logs/cname.log`**.
+Logs: **`Logs/cname.log`** (also mirrored to stdout / **`journalctl -u cloudflare-cname-api.service`** when run under systemd).
 
 More context: **[CNAME_SETUP.md](./CNAME_SETUP.md)**.
 
