@@ -93,6 +93,8 @@ Ensures these records exist on Cloudflare (creates or updates; does not delete u
 |------|------|-------|
 | TXT | apex (`--domain`) | Apple personal verification (`apple-domain=…`) |
 | TXT | apex | `v=spf1 include:icloud.com ~all` (override with `ICLOUD_SPF_VALUE`) |
+
+`SyncICloudMailDNS` sends TXT values to Cloudflare wrapped in double quotes (RFC 1035). **`.env`** values stay unquoted, e.g. `apple-domain=YOUR_CODE`.
 | MX | apex | `mx01.mail.icloud.com` (priority 10) |
 | MX | apex | `mx02.mail.icloud.com` (priority 10) |
 | CNAME | `sig1._domainkey.<domain>` | Apple DKIM target |

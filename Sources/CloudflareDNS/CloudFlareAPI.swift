@@ -36,7 +36,7 @@ public struct CloudFlareAPI {
         try? await "\(String(buffer: buffer))\n".append(toFileAt: logFile)
         return []
       }
-      let cfResponse = try JSONDecoder().decode(CloudFlareResponse.self, from: buffer)
+      let cfResponse = try JSONDecoder().decode(CloudFlareResponse.self, from: Data(buffer.readableBytesView))
       return cfResponse.result
     } catch {
       try? await "Error listing records: \(error.localizedDescription)\n".append(toFileAt: logFile)
@@ -63,12 +63,14 @@ public struct CloudFlareAPI {
       let priority: Int?
     }
 
+    let recordContent = type == "TXT" ? TXTRecordContent.wrapped(content) : content
+
     do {
       let data = try JSONEncoder().encode(
         RecordCreate(
           type: type,
           name: name,
-          content: content,
+          content: recordContent,
           ttl: 3600,
           proxied: false,
           priority: priority
@@ -78,8 +80,8 @@ public struct CloudFlareAPI {
       let rsp = try await HTTPClient.shared.execute(req, timeout: .seconds(10))
       let buffer = try await rsp.body.collect(upTo: 1 * 1024 * 1024)
       if rsp.status == .ok {
-        try? await "created \(type) \(name) → \(content)\n".append(toFileAt: logFile)
-        let cfResponse = try JSONDecoder().decode(CloudFlareUpdateResponse.self, from: buffer)
+        try? await "created \(type) \(name) → \(recordContent)\n".append(toFileAt: logFile)
+        let cfResponse = try JSONDecoder().decode(CloudFlareUpdateResponse.self, from: Data(buffer.readableBytesView))
         if cfResponse.success {
           return cfResponse.result.id
         }
@@ -111,12 +113,14 @@ public struct CloudFlareAPI {
       let priority: Int?
     }
 
+    let recordContent = type == "TXT" ? TXTRecordContent.wrapped(content) : content
+
     do {
       let data = try JSONEncoder().encode(
         RecordUpdate(
           type: type,
           name: name,
-          content: content,
+          content: recordContent,
           ttl: 3600,
           proxied: false,
           priority: priority
@@ -126,9 +130,9 @@ public struct CloudFlareAPI {
       let rsp = try await HTTPClient.shared.execute(req, timeout: .seconds(10))
       let buffer = try await rsp.body.collect(upTo: 1 * 1024 * 1024)
       if rsp.status == .ok {
-        let cfResponse = try JSONDecoder().decode(CloudFlareUpdateResponse.self, from: buffer)
+        let cfResponse = try JSONDecoder().decode(CloudFlareUpdateResponse.self, from: Data(buffer.readableBytesView))
         if cfResponse.success {
-          try? await "updated \(type) \(name) → \(content)\n".append(toFileAt: logFile)
+          try? await "updated \(type) \(name) → \(recordContent)\n".append(toFileAt: logFile)
         } else {
           try? await "Update failed: \(String(buffer: buffer))\n".append(toFileAt: logFile)
         }
@@ -148,8 +152,13 @@ public struct CloudFlareAPI {
     priority: Int? = nil
   ) async {
     let records = await listRecords(type: type, name: name, zoneID: zoneID)
+    let recordContent = type == "TXT" ? TXTRecordContent.wrapped(content) : content
     let existing = records.first { record in
-      guard record.content == content else { return false }
+      let contentMatches =
+        type == "TXT"
+        ? TXTRecordContent.matches(record.content, content)
+        : record.content == content
+      guard contentMatches else { return false }
       if type == "MX" {
         return record.priority == priority
       }
@@ -157,6 +166,13 @@ public struct CloudFlareAPI {
     }
 
     if let existing {
+      let unchanged =
+        type == "TXT"
+        ? TXTRecordContent.matches(existing.content, content)
+        : existing.content == recordContent
+      if unchanged {
+        return
+      }
       await updateRecord(
         recordID: existing.id,
         type: type,

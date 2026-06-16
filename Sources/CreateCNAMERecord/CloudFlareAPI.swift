@@ -36,7 +36,7 @@ struct CloudFlareAPI {
           "listRecordsForName \(name): HTTP \(rsp.status) \(String(buffer: buffer))\n", to: logFile)
         return []
       }
-      let cfResponse = try JSONDecoder().decode(CloudFlareResponse.self, from: buffer)
+      let cfResponse = try JSONDecoder().decode(CloudFlareResponse.self, from: Data(buffer.readableBytesView))
       return cfResponse.result
     } catch {
       await LogLine.append("listRecordsForName error: \(error.localizedDescription)\n", to: logFile)
@@ -87,7 +87,7 @@ struct CloudFlareAPI {
         await LogLine.append("\(String(buffer: buffer))\n", to: logFile)
         return nil
       }
-      let cfResponse = try JSONDecoder().decode(CloudFlareResponse.self, from: buffer)
+      let cfResponse = try JSONDecoder().decode(CloudFlareResponse.self, from: Data(buffer.readableBytesView))
       guard cfResponse.result.count == 1 else { return nil }
       let row = cfResponse.result[0]
       return (row.id, row.content ?? "")
@@ -121,7 +121,7 @@ struct CloudFlareAPI {
       let buffer = try await rsp.body.collect(upTo: 1 * 1024 * 1024)
       if rsp.status == .ok {
         await LogLine.append("Created \(type) record for \(name) -> \(content)\n", to: logFile)
-        let cfResponse = try JSONDecoder().decode(CloudFlareUpdateResponse.self, from: buffer)
+        let cfResponse = try JSONDecoder().decode(CloudFlareUpdateResponse.self, from: Data(buffer.readableBytesView))
         if cfResponse.success {
           return cfResponse.result.id
         }
@@ -154,7 +154,7 @@ struct CloudFlareAPI {
       let rsp = try await HTTPClient.shared.execute(req, timeout: .seconds(3))
       let buffer = try await rsp.body.collect(upTo: 1 * 1024 * 1024)
       if rsp.status == .ok {
-        let cfResponse = try JSONDecoder().decode(CloudFlareUpdateResponse.self, from: buffer)
+        let cfResponse = try JSONDecoder().decode(CloudFlareUpdateResponse.self, from: Data(buffer.readableBytesView))
         if cfResponse.success {
           await LogLine.append("Updated \(type) \(name) -> \(content): \(Date())\n", to: logFile)
         } else {
