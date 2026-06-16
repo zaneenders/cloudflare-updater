@@ -9,7 +9,8 @@ let package = Package(
   ],
   products: [
     .executable(name: "CloudFlareUpdater", targets: ["CloudFlareUpdater"]),
-    .executable(name: "CreateCNAMERecord", targets: ["CreateCNAMERecord"])
+    .executable(name: "CreateCNAMERecord", targets: ["CreateCNAMERecord"]),
+    .executable(name: "SyncICloudMailDNS", targets: ["SyncICloudMailDNS"]),
   ],
   dependencies: [
     .package(
@@ -32,12 +33,11 @@ let package = Package(
         .product(name: "_NIOFileSystem", package: "swift-nio")
       ]
     ),
-    .executableTarget(
-      name: "CloudFlareUpdater",
+    .target(
+      name: "CloudflareDNS",
       dependencies: [
         "CloudflareLogging",
         .product(name: "AsyncHTTPClient", package: "async-http-client"),
-        .product(name: "ArgumentParser", package: "swift-argument-parser"),
         .product(name: "_NIOFileSystem", package: "swift-nio"),
         .product(name: "Subprocess", package: "swift-subprocess"),
       ]
@@ -51,6 +51,21 @@ let package = Package(
         .product(name: "_NIOFileSystem", package: "swift-nio"),
         .product(name: "Subprocess", package: "swift-subprocess"),
       ]
-    )
+    ),
+    .executableTarget(
+      name: "CloudFlareUpdater",
+      dependencies: [
+        "CloudflareDNS",
+        .product(name: "ArgumentParser", package: "swift-argument-parser"),
+      ]
+    ),
+    .executableTarget(
+      name: "SyncICloudMailDNS",
+      dependencies: [
+        "CloudflareDNS",
+        .product(name: "ArgumentParser", package: "swift-argument-parser"),
+        .product(name: "_NIOFileSystem", package: "swift-nio"),
+      ]
+    ),
   ]
 )

@@ -3,20 +3,28 @@ import Foundation
 import NIOCore
 import NIOFileSystem
 
-func updateDNS(for config: CloudFlareConfig) async {
-  let api = CloudFlareAPI(email: config.email, apiKey: config.apiKey, logFile: logFile)
-  let updater = DNSUpdater(api: api, config: config, ip4File: ip4File, ip6File: ip6File, ipLog: ipLog)
-  await updater.update()
-}
-
-struct DNSUpdater {
+public struct DNSUpdater {
   let api: CloudFlareAPI
   let config: CloudFlareConfig
   let ip4File: FilePath
   let ip6File: FilePath
   let ipLog: FilePath
 
-  func update() async {
+  public init(
+    api: CloudFlareAPI,
+    config: CloudFlareConfig,
+    ip4File: FilePath,
+    ip6File: FilePath,
+    ipLog: FilePath
+  ) {
+    self.api = api
+    self.config = config
+    self.ip4File = ip4File
+    self.ip6File = ip6File
+    self.ipLog = ipLog
+  }
+
+  public func update() async {
     let ip = await api.getIP(version: 4)
     let key = "ipv4"
     guard let newIP = ip else {
@@ -49,11 +57,9 @@ struct DNSUpdater {
       if oldIP != newIP {
         await LogLine.append(
           "\(key.uppercased()) IP changed from \(oldIP) to \(newIP): \(Date())\n", to: api.logFile)
-        // Update the stored IP
         let newBuffer = ByteBuffer(string: newIP)
         try await fh.resize(to: .bytes(Int64(newBuffer.readableBytes)))
         try await fh.write(contentsOf: newBuffer, toAbsoluteOffset: 0)
-        // Update the DNS record
         await api.updateRecord(
           recordID: recordID!, type: recordType, name: config.site, content: newIP, zoneID: config.zoneID)
       }

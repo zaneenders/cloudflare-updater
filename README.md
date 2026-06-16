@@ -1,62 +1,124 @@
 # cloudflare-updater
 
-Swift CLIs for **Cloudflare DNS** when your origin has a **dynamic public IPv4**.
+Swift CLIs for **Cloudflare DNS**: dynamic **A** records, **CNAME** helpers, and **iCloud+ Custom Email Domain** sync.
+
+Shared library **`CloudflareDNS`** holds the Cloudflare API client and record upsert logic; each binary is a thin **ArgumentParser** wrapper.
 
 ## Products
 
 | Binary | Purpose |
 |--------|---------|
-| **`CloudFlareUpdater`** | Reads current public IPv4, then **creates or updates** the zone **A** record for **`--site`** (e.g. apex **`shapetree.org`**). Intended for a **systemd timer** every minute. |
-| **`CreateCNAMERecord`** | **Creates or fixes** a **CNAME**: **`--site`** (FQDN, e.g. **`api.shapetree.org`**) → **`--target`** (apex, e.g. **`shapetree.org`**). Idempotent: skips if correct, **PATCH**es if the target is wrong. Run **once** (or occasionally) — not on the same timer as the A record. |
+| **`CloudFlareUpdater`** | Reads current public IPv4, then **creates or updates** the zone **A** record for **`--site`** (e.g. apex **`zaneenders.com`**). Run on a **systemd timer** (~every minute). |
+| **`CreateCNAMERecord`** | **Creates or fixes** a **CNAME**: **`--site`** (FQDN, e.g. **`www.zaneenders.com`**) → **`--target`** (apex). Idempotent: skips if correct, **PATCH**es if wrong. Run once or occasionally — not on the same timer as the A record. |
+| **`SyncICloudMailDNS`** | Idempotently syncs [iCloud+ Custom Email Domain](https://support.apple.com/en-us/102540) DNS to Cloudflare (TXT, MX, DKIM CNAME). Run daily or after Apple gives you new verification values. |
 
-Together: **A** on the apex follows the server IP; **CNAME**s to the apex follow automatically.
+Together: **A** on the apex follows the server IP; **CNAME**s to the apex track automatically; **mail** records stay aligned with Apple.
 
 ## Build
 
 ```bash
+swift build -c release
+# or one product:
 swift build -c release --product CloudFlareUpdater
 swift build -c release --product CreateCNAMERecord
+swift build -c release --product SyncICloudMailDNS
 ```
+
+**Linux static (musl)** — same as CI:
+
+```bash
+swift sdk install https://download.swift.org/swift-6.2.3-release/static-sdk/swift-6.2.3-RELEASE/swift-6.2.3-RELEASE_static-linux-0.0.1.artifactbundle.tar.gz \
+  --checksum f30ec724d824ef43b5546e02ca06a8682dafab4b26a99fbb0e858c347e507a2c
+swift build --swift-sdk x86_64-swift-linux-musl -c release
+```
+
+Binaries land in **`.build/release/`** (or **`.build/x86_64-swift-linux-musl/release/`** for musl).
+
+## Shared options
+
+All tools accept **`--zone-id`**, **`--email`**, and **`--api-key`** (Cloudflare Global API Key + account email). Env fallbacks:
+
+| Variable | Used by |
+|----------|---------|
+| `CLOUDFLARE_ZONE_ID` | all |
+| `CLOUDFLARE_EMAIL` | all |
+| `CLOUDFLARE_API_KEY` | all |
+| `CLOUDFLARE_SITE` | **CloudFlareUpdater** (apex), **SyncICloudMailDNS** (`--domain`) |
+| `CLOUDFLARE_CNAME_TARGET` | **CreateCNAMERecord** (`--target`) |
+
+Logs are written under **`Logs/`** relative to the process **working directory**. Each line is also printed to **stdout** so **systemd** stores the same text in the journal (`journalctl -u …`). Swift may emit harmless **`errno=13`** thread-priority lines to **stderr**.
+
+---
 
 ## CloudFlareUpdater
 
 ```bash
-CloudFlareUpdater --zone-id ZONE_ID --site shapetree.org --email you@example.com --api-key GLOBAL_API_KEY
+CloudFlareUpdater \
+  --zone-id ZONE_ID \
+  --site zaneenders.com \
+  --email you@example.com \
+  --api-key GLOBAL_API_KEY
 ```
 
-Logs: **`Logs/dns.log`** (cwd-relative). State files: **`Logs/ip4.txt`**, etc. Each log line is also printed to **stdout** so **systemd** captures the same text under **`journalctl -u cloudflare-updater.service`**. Swift may still emit harmless **`errno=13`** thread-priority lines to **stderr** in the journal.
+- **Logs:** `Logs/dns.log`, `Logs/ip.log`
+- **State:** `Logs/ip4.txt` (last seen IPv4)
 
-**Public IPv4 discovery** uses **`curl -4`** against **`CLOUDFLARE_PUBLIC_IP_URL`** if set, otherwise **`https://api.ipify.org`** (plain body = IP). Do not default to your own apex hostname before DNS points at this box, or updates never run. If you see **`curl command failed … exited(6)`** in **`dns.log`**, **`curl`’s exit 6** is **“Could not resolve host”** (DNS to that URL failed); check resolver/network or try **`curl -4 -sS https://api.ipify.org`** on the host.
+**Public IPv4 discovery** uses **`curl -4 https://zaneenders.com/ip`** (plain body = IP). If that fails, check **`curl -4 -sS https://zaneenders.com/ip`** on the host. **`curl` exit 6** means the hostname did not resolve.
+
+---
 
 ## CreateCNAMERecord
 
-**`api`** for server-tower / Caddy:
-
 ```bash
 CreateCNAMERecord \
   --zone-id ZONE_ID \
-  --site api.shapetree.org \
-  --target shapetree.org \
+  --site www.zaneenders.com \
+  --target zaneenders.com \
   --email you@example.com \
   --api-key GLOBAL_API_KEY
 ```
 
-**`www`** (if you want the tool to manage it instead of the dashboard):
+- **Logs:** `Logs/cname.log`
+- If an **A** or **AAAA** blocks the CNAME, the tool removes only those types, then creates the CNAME (**DNS only**, `proxied: false`).
+
+More detail: **[CNAME_SETUP.md](./CNAME_SETUP.md)**.
+
+---
+
+## SyncICloudMailDNS
+
+Ensures these records exist on Cloudflare (creates or updates; does not delete unrelated TXT records):
+
+| Type | Name | Value |
+|------|------|-------|
+| TXT | apex (`--domain`) | Apple personal verification (`apple-domain=…`) |
+| TXT | apex | `v=spf1 include:icloud.com ~all` (override with `ICLOUD_SPF_VALUE`) |
+| MX | apex | `mx01.mail.icloud.com` (priority 10) |
+| MX | apex | `mx02.mail.icloud.com` (priority 10) |
+| CNAME | `sig1._domainkey.<domain>` | Apple DKIM target |
 
 ```bash
-CreateCNAMERecord \
+SyncICloudMailDNS \
   --zone-id ZONE_ID \
-  --site www.shapetree.org \
-  --target shapetree.org \
+  --domain zaneenders.com \
   --email you@example.com \
-  --api-key GLOBAL_API_KEY
+  --api-key GLOBAL_API_KEY \
+  --verification-txt "apple-domain=YOUR_CODE" \
+  --dkim-target sig1.dkim.zaneenders.com.at.icloudmailadmin.com
 ```
 
-Same options via env: **`CLOUDFLARE_ZONE_ID`**, **`CLOUDFLARE_SITE`**, **`CLOUDFLARE_CNAME_TARGET`**, **`CLOUDFLARE_EMAIL`**, **`CLOUDFLARE_API_KEY`**.
+Or via env (typical with **server-tower** `EnvironmentFile`):
 
-Logs: **`Logs/cname.log`** (also mirrored to stdout / **`journalctl -u cloudflare-cname-api.service`** when run under systemd).
+| Variable | Required |
+|----------|----------|
+| `ICLOUD_MAIL_TXT_VERIFICATION` | yes |
+| `ICLOUD_DKIM_TARGET` | yes |
+| `ICLOUD_SPF_VALUE` | no (defaults to `v=spf1 include:icloud.com ~all`) |
 
-More context: **[CNAME_SETUP.md](./CNAME_SETUP.md)**.
+- **Logs:** `Logs/icloud-mail-dns.log`
+- **Cloudflare:** DKIM CNAME must stay **DNS only** (not proxied). Finish verification in [iCloud settings](https://www.icloud.com/settings) → Custom Email Domain.
+
+---
 
 ## DocC
 
