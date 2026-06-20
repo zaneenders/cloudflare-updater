@@ -63,7 +63,7 @@ CloudFlareUpdater \
 - **Logs:** `Logs/dns.log`, `Logs/ip.log`
 - **State:** `Logs/ip4.txt` (last seen IPv4)
 
-**Public IPv4 discovery** uses **`curl -4 https://zaneenders.com/ip`** (plain body = IP). If that fails, check **`curl -4 -sS https://zaneenders.com/ip`** on the host. **`curl` exit 6** means the hostname did not resolve.
+**Public IPv4 discovery** uses **`https://api.ipify.org`** (plain body = IP). If that fails, check **`curl -4 -sS https://api.ipify.org`** on the host.
 
 ---
 

@@ -2,7 +2,6 @@ import AsyncHTTPClient
 import Foundation
 import NIOCore
 import NIOFileSystem
-import Subprocess
 
 public struct CloudFlareAPI {
   public let email: String
@@ -194,30 +193,24 @@ public struct CloudFlareAPI {
   }
 
   public func getIP(version: Int) async -> String? {
-    let url = "https://zaneenders.com/ip"
+    let url = version == 4 ? "https://api.ipify.org" : "https://api64.ipify.org"
     do {
-      let result = try await run(.path("/usr/bin/curl"), arguments: ["-4", url], output: .data(limit: 4096))
-      if case .exited(let code) = result.terminationStatus, code == 0 {
-        if let ip = String(data: result.standardOutput, encoding: .utf8)?.trimmingCharacters(
-          in: .whitespacesAndNewlines)
-        {
-          print("ip: \(String(describing: ip))")
-          let ipOut =
-            ip.split(separator: ",")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .first ?? ""
-          print(ipOut)
-          return ipOut
-        }
-        return nil
-      } else {
-        try? await "curl command failed for IPv\(version) with status \(result.terminationStatus)\n".append(
+      let req = HTTPClientRequest(url: url)
+      let rsp = try await HTTPClient.shared.execute(req, timeout: .seconds(10))
+      let buffer = try await rsp.body.collect(upTo: 4096)
+      guard rsp.status == .ok else {
+        try? await "ipify request failed for IPv\(version) with status \(rsp.status)\n".append(
           toFileAt: logFile)
+        return nil
       }
+      let ip = String(buffer: buffer).trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !ip.isEmpty else { return nil }
+      print("ip: \(ip)")
+      return ip
     } catch {
       try? await "Error getting IPv\(version): \(error.localizedDescription)\n".append(toFileAt: logFile)
+      return nil
     }
-    return nil
   }
 
   private func addAuthHeaders(_ req: inout HTTPClientRequest) {

@@ -22,9 +22,6 @@ let package = Package(
     .package(
       url: "https://github.com/apple/swift-nio.git",
       from: "2.77.0"),
-    .package(
-      url: "https://github.com/swiftlang/swift-subprocess.git",
-      from: "0.1.0"),
   ],
   targets: [
     .target(
@@ -39,7 +36,6 @@ let package = Package(
         "CloudflareLogging",
         .product(name: "AsyncHTTPClient", package: "async-http-client"),
         .product(name: "_NIOFileSystem", package: "swift-nio"),
-        .product(name: "Subprocess", package: "swift-subprocess"),
       ]
     ),
     .executableTarget(
@@ -49,7 +45,6 @@ let package = Package(
         .product(name: "AsyncHTTPClient", package: "async-http-client"),
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
         .product(name: "_NIOFileSystem", package: "swift-nio"),
-        .product(name: "Subprocess", package: "swift-subprocess"),
       ]
     ),
     .executableTarget(
