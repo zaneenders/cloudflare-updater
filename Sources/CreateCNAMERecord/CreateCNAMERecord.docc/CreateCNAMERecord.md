@@ -1,50 +1,42 @@
 # ``CreateCNAMERecord``
 
-A command-line tool to create CNAME DNS records in CloudFlare.
-
-## Overview
-
-CreateCNAMERecord simplifies the creation of CNAME records in CloudFlare DNS. It checks for existing records before creating new ones to prevent duplicates.
-
-## Features
-
-- Create CNAME records pointing one domain to another
-- Automatic duplicate detection
-- Detailed logging to `Logs/cname.log`
-- Environment variable or command-line configuration
+Create or fix a CNAME record pointing a subdomain to the apex.
 
 ## Usage
 
 ```bash
-# Using environment variables
-export CLOUDFLARE_ZONE_ID="your-zone-id"
-export CLOUDFLARE_SITE="www.example.com"
-export CLOUDFLARE_CNAME_TARGET="example.com"
-export CLOUDFLARE_EMAIL="your@email.com"
-export CLOUDFLARE_API_KEY="your-api-key"
-
-CreateCNAMERecord
-
-# Using command-line arguments
 CreateCNAMERecord \
-  --zoneID your-zone-id \
+  --zone-id abc123... \
   --site www.example.com \
   --target example.com \
-  --email your@email.com \
-  --apiKey your-api-key
+  --email you@example.com \
+  --api-key your-global-api-key
 ```
 
-## Configuration
+With environment variables:
 
-All configuration options can be provided via environment variables or command-line arguments:
+```bash
+export CLOUDFLARE_ZONE_ID=abc123...
+export CLOUDFLARE_EMAIL=you@example.com
+export CLOUDFLARE_API_KEY=your-global-api-key
 
-| Option | Environment Variable | Description |
-|--------|---------------------|-------------|
-| `--zoneID` | `CLOUDFLARE_ZONE_ID` | Your CloudFlare Zone ID |
-| `--site` | `CLOUDFLARE_SITE` | The subdomain to create (e.g., www.example.com) |
-| `--target` | `CLOUDFLARE_CNAME_TARGET` | The target domain for the CNAME record |
-| `--email` | `CLOUDFLARE_EMAIL` | Your CloudFlare account email |
-| `--apiKey` | `CLOUDFLARE_API_KEY` | Your CloudFlare API key |
+CreateCNAMERecord --site www.example.com --target example.com
+CreateCNAMERecord --site api.example.com --target example.com
+```
+
+## Behavior
+
+- CNAME missing → creates it (DNS-only, not proxied)
+- CNAME exists and points to `--target` → no-op
+- CNAME exists but points elsewhere → patches to target
+- Conflicting A or AAAA records → automatically removed before creating the CNAME
+
+## Verify
+
+```bash
+dig www.example.com +short
+# → example.com.
+```
 
 ## Topics
 
@@ -52,13 +44,8 @@ All configuration options can be provided via environment variables or command-l
 
 - ``CreateCNAMERecord``
 - ``CloudFlareConfig``
-
-### API Integration
-
 - ``CloudFlareAPI``
-- ``CloudFlareResponse``
-- ``CloudFlareUpdateResponse``
 
-### Utilities
+### Logging
 
-- ``String`` extensions
+- ``LogLine``

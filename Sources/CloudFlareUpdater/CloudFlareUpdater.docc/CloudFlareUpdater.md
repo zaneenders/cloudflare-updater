@@ -1,52 +1,45 @@
 # ``CloudFlareUpdater``
 
-A command-line tool to automatically update CloudFlare DNS A records with your current IP address.
-
-## Overview
-
-CloudFlareUpdater monitors your public IP address and automatically updates DNS A records in CloudFlare when your IP changes. This is useful for:
-
-- Dynamic DNS setups
-- Home servers with changing IP addresses
-- Automated DNS management
-
-## Features
-
-- Automatic IP detection (IPv4 and IPv6)
-- CloudFlare DNS record updates
-- Detailed logging to `Logs/dns.log`
-- IP address history tracking
-- Environment variable or command-line configuration
+Keep a Cloudflare DNS A record pointed at your server's current public IPv4.
 
 ## Usage
 
 ```bash
-# Using environment variables
-export CLOUDFLARE_ZONE_ID="your-zone-id"
-export CLOUDFLARE_SITE="example.com"
-export CLOUDFLARE_EMAIL="your@email.com"
-export CLOUDFLARE_API_KEY="your-api-key"
-
-CloudFlareUpdater
-
-# Using command-line arguments
+# All options can be CLI flags or environment variables.
 CloudFlareUpdater \
-  --zoneID your-zone-id \
+  --zone-id abc123... \
   --site example.com \
-  --email your@email.com \
-  --apiKey your-api-key
+  --email you@example.com \
+  --api-key your-global-api-key
 ```
 
-## Configuration
+With environment variables (recommended for systemd):
 
-All configuration options can be provided via environment variables or command-line arguments:
+```bash
+export CLOUDFLARE_ZONE_ID=abc123...
+export CLOUDFLARE_EMAIL=you@example.com
+export CLOUDFLARE_API_KEY=your-global-api-key
+export CLOUDFLARE_SITE=example.com
 
-| Option | Environment Variable | Description |
-|--------|---------------------|-------------|
-| `--zoneID` | `CLOUDFLARE_ZONE_ID` | Your CloudFlare Zone ID |
-| `--site` | `CLOUDFLARE_SITE` | The domain to update (e.g., example.com) |
-| `--email` | `CLOUDFLARE_EMAIL` | Your CloudFlare account email |
-| `--apiKey` | `CLOUDFLARE_API_KEY` | Your CloudFlare API key |
+CloudFlareUpdater
+```
+
+## Behavior
+
+- Fetches current public IPv4 from `api.ipify.org`
+- Compares against cached IP in `Logs/ip4-example.com.txt`
+- If unchanged → no-op (avoids unnecessary API calls)
+- If changed → upserts the A record for `--site`
+
+## Logs
+
+| File | Content |
+|------|---------|
+| `Logs/dns-example.com.log` | API call log |
+| `Logs/ip-example.com.log` | IP change history |
+| `Logs/ip4-example.com.txt` | Last seen IPv4 (cache) |
+
+All log lines also print to stdout for systemd journal capture.
 
 ## Topics
 
@@ -54,14 +47,10 @@ All configuration options can be provided via environment variables or command-l
 
 - ``CloudFlareUpdater``
 - ``CloudFlareConfig``
+- ``DNSUpdater``
 
-### API Integration
+### API
 
 - ``CloudFlareAPI``
 - ``CloudFlareResponse``
 - ``CloudFlareUpdateResponse``
-
-### Utilities
-
-- ``DNSUpdater``
-- ``String`` extensions
