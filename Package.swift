@@ -42,6 +42,7 @@ let package = Package(
       name: "CreateCNAMERecord",
       dependencies: [
         "CloudflareDNS",
+        "CloudflareLogging",
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
       ]
     ),

@@ -1,5 +1,6 @@
 import ArgumentParser
 import CloudflareDNS
+import CloudflareLogging
 import Foundation
 import NIOFileSystem
 
