@@ -1,4 +1,5 @@
 import AsyncHTTPClient
+import CloudflareLogging
 import Foundation
 import NIOCore
 import NIOFileSystem
@@ -20,6 +21,35 @@ public struct CloudFlareAPI {
     return records[0].id
   }
 
+  /// Returns record id and content when exactly one DNS record matches.
+  public func findRecord(type: String, name: String, zoneID: String) async -> (id: String, content: String)? {
+    guard let encodedName = name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+      return nil
+    }
+    let url =
+      "https://api.cloudflare.com/client/v4/zones/\(zoneID)/dns_records?type=\(type)&name=\(encodedName)"
+    var req = HTTPClientRequest(url: url)
+    req.method = .GET
+    addAuthHeaders(&req)
+
+    do {
+      let rsp = try await HTTPClient.shared.execute(req, timeout: .seconds(10))
+      let buffer = try await rsp.body.collect(upTo: 1 * 1024 * 1024)
+      if rsp.status != .ok {
+        await LogLine.append("\(rsp.status): \(Date())\n", to: logFile)
+        await LogLine.append("\(String(buffer: buffer))\n", to: logFile)
+        return nil
+      }
+      let cfResponse = try JSONDecoder().decode(CloudFlareResponse.self, from: Data(buffer.readableBytesView))
+      guard cfResponse.result.count == 1 else { return nil }
+      let row = cfResponse.result[0]
+      return (row.id, row.content ?? "")
+    } catch {
+      await LogLine.append("Error finding record: \(error.localizedDescription)\n", to: logFile)
+    }
+    return nil
+  }
+
   public func listRecords(type: String, name: String, zoneID: String) async -> [CloudFlareResponse.DNSRecord] {
     let url =
       "https://api.cloudflare.com/client/v4/zones/\(zoneID)/dns_records?type=\(type)&name=\(name)"
@@ -31,15 +61,62 @@ public struct CloudFlareAPI {
       let rsp = try await HTTPClient.shared.execute(req, timeout: .seconds(10))
       let buffer = try await rsp.body.collect(upTo: 1 * 1024 * 1024)
       if rsp.status != .ok {
-        try? await "\(rsp.status): \(Date())\n".append(toFileAt: logFile)
-        try? await "\(String(buffer: buffer))\n".append(toFileAt: logFile)
+        await LogLine.append("\(rsp.status): \(Date())\n", to: logFile)
+        await LogLine.append("\(String(buffer: buffer))\n", to: logFile)
         return []
       }
       let cfResponse = try JSONDecoder().decode(CloudFlareResponse.self, from: Data(buffer.readableBytesView))
       return cfResponse.result
     } catch {
-      try? await "Error listing records: \(error.localizedDescription)\n".append(toFileAt: logFile)
+      await LogLine.append("Error listing records: \(error.localizedDescription)\n", to: logFile)
       return []
+    }
+  }
+
+  /// All DNS records for this exact name (any type), e.g. to detect a blocking `A` when we need `CNAME`.
+  public func listRecordsForName(name: String, zoneID: String) async -> [CloudFlareResponse.DNSRecord] {
+    guard let encodedName = name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+      return []
+    }
+    let url =
+      "https://api.cloudflare.com/client/v4/zones/\(zoneID)/dns_records?name=\(encodedName)"
+    var req = HTTPClientRequest(url: url)
+    req.method = .GET
+    addAuthHeaders(&req)
+
+    do {
+      let rsp = try await HTTPClient.shared.execute(req, timeout: .seconds(10))
+      let buffer = try await rsp.body.collect(upTo: 1 * 1024 * 1024)
+      if rsp.status != .ok {
+        await LogLine.append(
+          "listRecordsForName \(name): HTTP \(rsp.status) \(String(buffer: buffer))\n", to: logFile)
+        return []
+      }
+      let cfResponse = try JSONDecoder().decode(CloudFlareResponse.self, from: Data(buffer.readableBytesView))
+      return cfResponse.result
+    } catch {
+      await LogLine.append("listRecordsForName error: \(error.localizedDescription)\n", to: logFile)
+    }
+    return []
+  }
+
+  public func deleteRecord(recordID: String, zoneID: String) async {
+    let url = "https://api.cloudflare.com/client/v4/zones/\(zoneID)/dns_records/\(recordID)"
+    var req = HTTPClientRequest(url: url)
+    req.method = .DELETE
+    addAuthHeaders(&req)
+
+    do {
+      let rsp = try await HTTPClient.shared.execute(req, timeout: .seconds(10))
+      let buffer = try await rsp.body.collect(upTo: 1 * 1024 * 1024)
+      if rsp.status != .ok {
+        await LogLine.append(
+          "deleteRecord \(recordID): HTTP \(rsp.status) \(String(buffer: buffer))\n", to: logFile)
+      } else {
+        await LogLine.append("deleteRecord ok id=\(recordID) \(Date())\n", to: logFile)
+      }
+    } catch {
+      await LogLine.append("deleteRecord error: \(error.localizedDescription)\n", to: logFile)
     }
   }
 
@@ -79,15 +156,15 @@ public struct CloudFlareAPI {
       let rsp = try await HTTPClient.shared.execute(req, timeout: .seconds(10))
       let buffer = try await rsp.body.collect(upTo: 1 * 1024 * 1024)
       if rsp.status == .ok {
-        try? await "created \(type) \(name) → \(recordContent)\n".append(toFileAt: logFile)
+        await LogLine.append("created \(type) \(name) → \(recordContent)\n", to: logFile)
         let cfResponse = try JSONDecoder().decode(CloudFlareUpdateResponse.self, from: Data(buffer.readableBytesView))
         if cfResponse.success {
           return cfResponse.result.id
         }
       }
-      try? await "\(rsp.status): \(String(buffer: buffer))\n".append(toFileAt: logFile)
+      await LogLine.append("\(rsp.status): \(String(buffer: buffer))\n", to: logFile)
     } catch {
-      try? await "Error creating record: \(error.localizedDescription)\n".append(toFileAt: logFile)
+      await LogLine.append("Error creating record: \(error.localizedDescription)\n", to: logFile)
     }
     return nil
   }
@@ -131,15 +208,15 @@ public struct CloudFlareAPI {
       if rsp.status == .ok {
         let cfResponse = try JSONDecoder().decode(CloudFlareUpdateResponse.self, from: Data(buffer.readableBytesView))
         if cfResponse.success {
-          try? await "updated \(type) \(name) → \(recordContent)\n".append(toFileAt: logFile)
+          await LogLine.append("updated \(type) \(name) → \(recordContent)\n", to: logFile)
         } else {
-          try? await "Update failed: \(String(buffer: buffer))\n".append(toFileAt: logFile)
+          await LogLine.append("Update failed: \(String(buffer: buffer))\n", to: logFile)
         }
       } else {
-        try? await "\(rsp.status): \(String(buffer: buffer))\n".append(toFileAt: logFile)
+        await LogLine.append("\(rsp.status): \(String(buffer: buffer))\n", to: logFile)
       }
     } catch {
-      try? await "Error updating record: \(error.localizedDescription)\n".append(toFileAt: logFile)
+      await LogLine.append("Error updating record: \(error.localizedDescription)\n", to: logFile)
     }
   }
 
@@ -199,8 +276,7 @@ public struct CloudFlareAPI {
       let rsp = try await HTTPClient.shared.execute(req, timeout: .seconds(10))
       let buffer = try await rsp.body.collect(upTo: 4096)
       guard rsp.status == .ok else {
-        try? await "ipify request failed for IPv\(version) with status \(rsp.status)\n".append(
-          toFileAt: logFile)
+        await LogLine.append("ipify request failed for IPv\(version) with status \(rsp.status)\n", to: logFile)
         return nil
       }
       let ip = String(buffer: buffer).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -208,7 +284,7 @@ public struct CloudFlareAPI {
       print("ip: \(ip)")
       return ip
     } catch {
-      try? await "Error getting IPv\(version): \(error.localizedDescription)\n".append(toFileAt: logFile)
+      await LogLine.append("Error getting IPv\(version): \(error.localizedDescription)\n", to: logFile)
       return nil
     }
   }
@@ -247,7 +323,7 @@ public struct ICloudMailDNSSync {
   public func sync() async {
     let apex = domain
     let dkimName = "sig1._domainkey.\(domain)"
-    try? await "Syncing iCloud Mail DNS for \(domain)\n".append(toFileAt: api.logFile)
+    await LogLine.append("Syncing iCloud Mail DNS for \(domain)\n", to: api.logFile)
 
     await api.upsertRecord(type: "TXT", name: apex, content: verificationTXT, zoneID: zoneID)
     await api.upsertRecord(type: "TXT", name: apex, content: spfValue, zoneID: zoneID)
@@ -257,6 +333,15 @@ public struct ICloudMailDNSSync {
       type: "MX", name: apex, content: "mx02.mail.icloud.com", zoneID: zoneID, priority: 10)
     await api.upsertRecord(type: "CNAME", name: dkimName, content: dkimTarget, zoneID: zoneID)
 
-    try? await "Finished iCloud Mail DNS sync for \(domain)\n".append(toFileAt: api.logFile)
+    await LogLine.append("Finished iCloud Mail DNS sync for \(domain)\n", to: api.logFile)
+  }
+}
+
+/// Creates the Logs directory if it does not already exist.
+public func ensureLogsDirectory(at logsPath: FilePath) async throws {
+  let info = try await FileSystem.shared.info(forFileAt: logsPath)
+  if info == nil {
+    try await FileSystem.shared.createDirectory(at: logsPath, withIntermediateDirectories: true)
+    print("Created: \(logsPath.string)")
   }
 }

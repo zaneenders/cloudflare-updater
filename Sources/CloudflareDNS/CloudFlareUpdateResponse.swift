@@ -1,9 +1,9 @@
-struct CloudFlareUpdateResponse: Codable {
-  let result: Result
-  let success: Bool
-  let errors, messages: [String]
+public struct CloudFlareUpdateResponse: Codable {
+  public let result: Result
+  public let success: Bool
+  public let errors, messages: [String]
 
-  struct Result: Codable {
-    let id: String
+  public struct Result: Codable {
+    public let id: String
   }
 }

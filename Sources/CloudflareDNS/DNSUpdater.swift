@@ -36,36 +36,49 @@ public struct DNSUpdater {
 
     let recordType = key == "ipv4" ? "A" : "AAAA"
     let ipFile = key == "ipv4" ? ip4File : ip6File
-    var recordID = await api.getRecordID(type: recordType, name: config.site, zoneID: config.zoneID)
+    let recordID = await api.getRecordID(type: recordType, name: config.site, zoneID: config.zoneID)
 
-    if recordID == nil {
-      recordID = await api.createRecord(
-        type: recordType, name: config.site, content: newIP, zoneID: config.zoneID)
-      if recordID != nil {
-        await LogLine.append("Created new \(recordType) record for \(key): \(Date())\n", to: api.logFile)
-      } else {
+    if let recordID {
+      // Record exists — only update if the IP changed from last known.
+      let oldIP = await readIPFile(ipFile)
+      if oldIP == newIP { return }
+      await LogLine.append(
+        "\(key.uppercased()) IP changed from \(oldIP) to \(newIP): \(Date())\n", to: api.logFile)
+      await writeIPFile(ipFile, newIP)
+      await api.updateRecord(
+        recordID: recordID, type: recordType, name: config.site, content: newIP, zoneID: config.zoneID)
+    } else {
+      // No record yet — create it and persist the IP.
+      if await api.createRecord(
+        type: recordType, name: config.site, content: newIP, zoneID: config.zoneID) == nil {
         await LogLine.append("Failed to create \(recordType) record for \(key): \(Date())\n", to: api.logFile)
         return
       }
+      await LogLine.append("Created new \(recordType) record for \(key): \(Date())\n", to: api.logFile)
+      await writeIPFile(ipFile, newIP)
     }
+  }
 
+  private func readIPFile(_ path: FilePath) async -> String {
+    do {
+      let fh = try await FileSystem.shared.openFile(forReadingAt: path)
+      let buffer = try await fh.readToEnd(maximumSizeAllowed: .unlimited)
+      try? await fh.close()
+      return String(buffer: buffer)
+    } catch {
+      return ""
+    }
+  }
+
+  private func writeIPFile(_ path: FilePath, _ ip: String) async {
     do {
       let fh = try await FileSystem.shared.openFile(
-        forReadingAndWritingAt: ipFile, options: .modifyFile(createIfNecessary: true))
-      let buffer = try await fh.readToEnd(maximumSizeAllowed: .unlimited)
-      let oldIP = String(buffer: buffer)
-      if oldIP != newIP {
-        await LogLine.append(
-          "\(key.uppercased()) IP changed from \(oldIP) to \(newIP): \(Date())\n", to: api.logFile)
-        let newBuffer = ByteBuffer(string: newIP)
-        try await fh.resize(to: .bytes(Int64(newBuffer.readableBytes)))
-        try await fh.write(contentsOf: newBuffer, toAbsoluteOffset: 0)
-        await api.updateRecord(
-          recordID: recordID!, type: recordType, name: config.site, content: newIP, zoneID: config.zoneID)
-      }
+        forWritingAt: path, options: .newFile(replaceExisting: true))
+      let buffer = ByteBuffer(string: ip)
+      try await fh.write(contentsOf: buffer, toAbsoluteOffset: 0)
       try await fh.close()
     } catch {
-      await LogLine.append("Error handling \(key) IP file: \(error.localizedDescription)\n", to: ipLog)
+      await LogLine.append("Error writing IP file \(path): \(error.localizedDescription)\n", to: ipLog)
     }
   }
 }

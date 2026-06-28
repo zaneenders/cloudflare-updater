@@ -29,7 +29,7 @@ struct CloudFlareUpdater: AsyncParsableCommand {
     }
     let config = CloudFlareConfig(zoneID: zoneID, site: site, email: email, apiKey: apiKey)
     let logsPath = FilePath(FileManager.default.currentDirectoryPath).appending("Logs")
-    try await ensureLogsDirectory(at: logsPath)
+    try await CloudflareDNS.ensureLogsDirectory(at: logsPath)
 
     let logFile = logsPath.appending("dns-\(site).log")
     let ipLog = logsPath.appending("ip-\(site).log")
@@ -45,13 +45,5 @@ struct CloudFlareUpdater: AsyncParsableCommand {
       ipLog: ipLog
     )
     await updater.update()
-  }
-
-  private func ensureLogsDirectory(at logsPath: FilePath) async throws {
-    let info = try await FileSystem.shared.info(forFileAt: logsPath)
-    if info == nil {
-      try await FileSystem.shared.createDirectory(at: logsPath, withIntermediateDirectories: true)
-      print("Created: \(logsPath.string)")
-    }
   }
 }

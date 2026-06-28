@@ -5,6 +5,8 @@ public struct CloudFlareResponse: Codable {
 
   public struct DNSRecord: Codable {
     public let id: String
+    public let type: String?
+    public let name: String?
     public let content: String?
     public let priority: Int?
   }

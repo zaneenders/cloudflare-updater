@@ -47,7 +47,7 @@ struct SyncICloudMailDNS: AsyncParsableCommand {
     }
 
     let logsPath = FilePath(FileManager.default.currentDirectoryPath).appending("Logs")
-    try await ensureLogsDirectory(at: logsPath)
+    try await CloudflareDNS.ensureLogsDirectory(at: logsPath)
     let logFile = logsPath.appending("icloud-mail-dns.log")
 
     let api = CloudFlareAPI(email: email, apiKey: apiKey, logFile: logFile)
@@ -60,13 +60,5 @@ struct SyncICloudMailDNS: AsyncParsableCommand {
       dkimTarget: dkimTarget
     )
     await sync.sync()
-  }
-
-  private func ensureLogsDirectory(at logsPath: FilePath) async throws {
-    let info = try await FileSystem.shared.info(forFileAt: logsPath)
-    if info == nil {
-      try await FileSystem.shared.createDirectory(at: logsPath, withIntermediateDirectories: true)
-      print("Created: \(logsPath.string)")
-    }
   }
 }

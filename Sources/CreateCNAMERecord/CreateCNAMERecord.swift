@@ -1,21 +1,7 @@
 import ArgumentParser
-import AsyncHTTPClient
-import CloudflareLogging
+import CloudflareDNS
 import Foundation
-import NIOCore
 import NIOFileSystem
-import NIOFoundationCompat
-
-struct CloudFlareConfig {
-  let zoneID: String
-  let site: String
-  let target: String
-  let email: String
-  let apiKey: String
-}
-
-let logDir = FilePath(FileManager.default.currentDirectoryPath).appending("Logs")
-let logFile = logDir.appending("cname.log")
 
 @main
 struct CreateCNAMERecord: AsyncParsableCommand {
@@ -23,10 +9,10 @@ struct CreateCNAMERecord: AsyncParsableCommand {
   @Option(name: .long, help: "CloudFlare Zone ID")
   var zoneID: String = ProcessInfo.processInfo.environment["CLOUDFLARE_ZONE_ID"] ?? ""
 
-  @Option(name: .long, help: "DNS name for the record (FQDN), e.g. api.shapetree.org")
+  @Option(name: .long, help: "DNS name for the record (FQDN), e.g. www.example.com")
   var site: String = ProcessInfo.processInfo.environment["CLOUDFLARE_SITE"] ?? ""
 
-  @Option(name: .long, help: "CNAME target hostname (apex), e.g. shapetree.org")
+  @Option(name: .long, help: "CNAME target hostname (apex), e.g. example.com")
   var target: String = ProcessInfo.processInfo.environment["CLOUDFLARE_CNAME_TARGET"] ?? ""
 
   @Option(name: .long, help: "CloudFlare email")
@@ -47,26 +33,19 @@ struct CreateCNAMERecord: AsyncParsableCommand {
     }
 
     let config = CloudFlareConfig(zoneID: zoneID, site: site, target: target, email: email, apiKey: apiKey)
-
     let logsPath = FilePath(FileManager.default.currentDirectoryPath).appending("Logs")
-    do {
-      let info = try await FileSystem.shared.info(forFileAt: logsPath)
-      if info == nil {
-        try await FileSystem.shared.createDirectory(at: logsPath, withIntermediateDirectories: true)
-        print("Created: \(logsPath.string)")
-      }
-    } catch {
-      print(error.localizedDescription)
-    }
+    try await ensureLogsDirectory(at: logsPath)
+    let logFile = logsPath.appending("cname.log")
 
-    await ensureCNAMERecord(for: config)
+    await ensureCNAMERecord(for: config, logFile: logFile)
   }
 }
 
-func ensureCNAMERecord(for config: CloudFlareConfig) async {
+func ensureCNAMERecord(for config: CloudFlareConfig, logFile: FilePath) async {
   let api = CloudFlareAPI(email: config.email, apiKey: config.apiKey, logFile: logFile)
+  guard let target = config.target else { return }
 
-  let normalizedTarget = config.target.trimmingCharacters(in: CharacterSet(charactersIn: "."))
+  let normalizedTarget = target.trimmingCharacters(in: CharacterSet(charactersIn: "."))
 
   if let existing = await api.findRecord(type: "CNAME", name: config.site, zoneID: config.zoneID) {
     let current = existing.content.trimmingCharacters(in: CharacterSet(charactersIn: "."))
@@ -75,9 +54,9 @@ func ensureCNAMERecord(for config: CloudFlareConfig) async {
         "CNAME unchanged: \(config.site) -> \(existing.content): \(Date())\n", to: logFile)
       return
     }
-    print("Updating CNAME \(config.site): \(existing.content) -> \(config.target)")
+    print("Updating CNAME \(config.site): \(existing.content) -> \(target)")
     await api.updateRecord(
-      recordID: existing.id, type: "CNAME", name: config.site, content: config.target,
+      recordID: existing.id, type: "CNAME", name: config.site, content: target,
       zoneID: config.zoneID)
     return
   }
@@ -92,12 +71,12 @@ func ensureCNAMERecord(for config: CloudFlareConfig) async {
       let current = (row.content ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "."))
       if current.caseInsensitiveCompare(normalizedTarget) == .orderedSame {
         await LogLine.append(
-          "CNAME unchanged: \(config.site) -> \(row.content ?? config.target): \(Date())\n", to: logFile)
+          "CNAME unchanged: \(config.site) -> \(row.content ?? target): \(Date())\n", to: logFile)
         return
       }
-      print("Updating CNAME \(config.site): \(row.content ?? "") -> \(config.target)")
+      print("Updating CNAME \(config.site): \(row.content ?? "") -> \(target)")
       await api.updateRecord(
-        recordID: row.id, type: "CNAME", name: config.site, content: config.target,
+        recordID: row.id, type: "CNAME", name: config.site, content: target,
         zoneID: config.zoneID)
       return
     }
@@ -113,12 +92,12 @@ func ensureCNAMERecord(for config: CloudFlareConfig) async {
     return
   }
 
-  print("Creating CNAME: \(config.site) -> \(config.target)")
+  print("Creating CNAME: \(config.site) -> \(target)")
   if let id = await api.createRecord(
-    type: "CNAME", name: config.site, content: config.target, zoneID: config.zoneID)
+    type: "CNAME", name: config.site, content: target, zoneID: config.zoneID)
   {
     await LogLine.append(
-      "Created CNAME \(config.site) -> \(config.target) (id=\(id)): \(Date())\n", to: logFile)
+      "Created CNAME \(config.site) -> \(target) (id=\(id)): \(Date())\n", to: logFile)
   } else {
     await LogLine.append("Failed to create CNAME for \(config.site): \(Date())\n", to: logFile)
   }

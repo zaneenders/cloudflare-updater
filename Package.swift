@@ -41,10 +41,8 @@ let package = Package(
     .executableTarget(
       name: "CreateCNAMERecord",
       dependencies: [
-        "CloudflareLogging",
-        .product(name: "AsyncHTTPClient", package: "async-http-client"),
+        "CloudflareDNS",
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
-        .product(name: "_NIOFileSystem", package: "swift-nio"),
       ]
     ),
     .executableTarget(
