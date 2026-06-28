@@ -62,9 +62,14 @@ public struct DNSUpdater {
   private func readIPFile(_ path: FilePath) async -> String {
     do {
       let fh = try await FileSystem.shared.openFile(forReadingAt: path)
-      let buffer = try await fh.readToEnd(maximumSizeAllowed: .unlimited)
-      try? await fh.close()
-      return String(buffer: buffer)
+      do {
+        let buffer = try await fh.readToEnd(maximumSizeAllowed: .unlimited)
+        try await fh.close()
+        return String(buffer: buffer)
+      } catch {
+        try? await fh.close()
+        throw error
+      }
     } catch {
       return ""
     }
@@ -74,9 +79,14 @@ public struct DNSUpdater {
     do {
       let fh = try await FileSystem.shared.openFile(
         forWritingAt: path, options: .newFile(replaceExisting: true))
-      let buffer = ByteBuffer(string: ip)
-      try await fh.write(contentsOf: buffer, toAbsoluteOffset: 0)
-      try await fh.close()
+      do {
+        let buf = ByteBuffer(string: ip)
+        try await fh.write(contentsOf: buf, toAbsoluteOffset: 0)
+        try await fh.close()
+      } catch {
+        try? await fh.close()
+        throw error
+      }
     } catch {
       await LogLine.append("Error writing IP file \(path): \(error.localizedDescription)\n", to: ipLog)
     }

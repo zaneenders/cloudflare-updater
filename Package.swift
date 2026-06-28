@@ -50,6 +50,7 @@ let package = Package(
       name: "CloudFlareUpdater",
       dependencies: [
         "CloudflareDNS",
+        "CloudflareLogging",
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
       ]
     ),
@@ -57,6 +58,7 @@ let package = Package(
       name: "SyncICloudMailDNS",
       dependencies: [
         "CloudflareDNS",
+        "CloudflareLogging",
         .product(name: "ArgumentParser", package: "swift-argument-parser"),
         .product(name: "_NIOFileSystem", package: "swift-nio"),
       ]

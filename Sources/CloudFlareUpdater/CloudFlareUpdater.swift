@@ -1,5 +1,6 @@
 import ArgumentParser
 import CloudflareDNS
+import CloudflareLogging
 import Foundation
 import NIOFileSystem
 
@@ -31,8 +32,8 @@ struct CloudFlareUpdater: AsyncParsableCommand {
     let logsPath = FilePath(FileManager.default.currentDirectoryPath).appending("Logs")
     try await CloudflareDNS.ensureLogsDirectory(at: logsPath)
 
-    let logFile = logsPath.appending("dns-\(site).log")
-    let ipLog = logsPath.appending("ip-\(site).log")
+    let logFile = logsPath.appending(datedLogName("dns-\(site)"))
+    let ipLog = logsPath.appending(datedLogName("ip-\(site)"))
     let ip4File = logsPath.appending("ip4-\(site).txt")
     let ip6File = logsPath.appending("ip6-\(site).txt")
 

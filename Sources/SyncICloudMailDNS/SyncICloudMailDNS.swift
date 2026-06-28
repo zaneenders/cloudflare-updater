@@ -1,5 +1,6 @@
 import ArgumentParser
 import CloudflareDNS
+import CloudflareLogging
 import Foundation
 import NIOFileSystem
 
@@ -48,7 +49,7 @@ struct SyncICloudMailDNS: AsyncParsableCommand {
 
     let logsPath = FilePath(FileManager.default.currentDirectoryPath).appending("Logs")
     try await CloudflareDNS.ensureLogsDirectory(at: logsPath)
-    let logFile = logsPath.appending("icloud-mail-dns.log")
+    let logFile = logsPath.appending(datedLogName("icloud-mail-dns"))
 
     let api = CloudFlareAPI(email: email, apiKey: apiKey, logFile: logFile)
     let sync = ICloudMailDNSSync(

@@ -36,7 +36,7 @@ struct CreateCNAMERecord: AsyncParsableCommand {
     let config = CloudFlareConfig(zoneID: zoneID, site: site, target: target, email: email, apiKey: apiKey)
     let logsPath = FilePath(FileManager.default.currentDirectoryPath).appending("Logs")
     try await ensureLogsDirectory(at: logsPath)
-    let logFile = logsPath.appending("cname.log")
+    let logFile = logsPath.appending(datedLogName("cname"))
 
     await ensureCNAMERecord(for: config, logFile: logFile)
   }
