@@ -31,10 +31,10 @@ struct CloudFlareUpdater: AsyncParsableCommand {
     let logsPath = FilePath(FileManager.default.currentDirectoryPath).appending("Logs")
     try await ensureLogsDirectory(at: logsPath)
 
-    let logFile = logsPath.appending("dns.log")
-    let ipLog = logsPath.appending("ip.log")
-    let ip4File = logsPath.appending("ip4.txt")
-    let ip6File = logsPath.appending("ip6.txt")
+    let logFile = logsPath.appending("dns-\(site).log")
+    let ipLog = logsPath.appending("ip-\(site).log")
+    let ip4File = logsPath.appending("ip4-\(site).txt")
+    let ip6File = logsPath.appending("ip6-\(site).txt")
 
     let api = CloudFlareAPI(email: email, apiKey: apiKey, logFile: logFile)
     let updater = DNSUpdater(
