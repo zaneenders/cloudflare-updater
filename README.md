@@ -8,8 +8,8 @@ Shared library **`CloudflareDNS`** holds the Cloudflare API client and record up
 
 | Binary | Purpose |
 |--------|---------|
-| **`CloudFlareUpdater`** | Reads current public IPv4, then **creates or updates** the zone **A** record for **`--site`** (e.g. apex **`zaneenders.com`**). Run on a **systemd timer** (~every minute). |
-| **`CreateCNAMERecord`** | **Creates or fixes** a **CNAME**: **`--site`** (FQDN, e.g. **`www.zaneenders.com`**) → **`--target`** (apex). Idempotent: skips if correct, **PATCH**es if wrong. Run once or occasionally — not on the same timer as the A record. |
+| **`CloudFlareUpdater`** | Reads current public IPv4, then **creates or updates** the zone **A** record for **`--site`** (e.g. apex **`example.com`**). Run on a **systemd timer** (~every minute). |
+| **`CreateCNAMERecord`** | **Creates or fixes** a **CNAME**: **`--site`** (FQDN, e.g. **`www.example.com`**) → **`--target`** (apex). Idempotent: skips if correct, **PATCH**es if wrong. Run once or occasionally — not on the same timer as the A record. |
 | **`SyncICloudMailDNS`** | Idempotently syncs [iCloud+ Custom Email Domain](https://support.apple.com/en-us/102540) DNS to Cloudflare (TXT, MX, DKIM CNAME). Run daily or after Apple gives you new verification values. |
 
 Together: **A** on the apex follows the server IP; **CNAME**s to the apex track automatically; **mail** records stay aligned with Apple.
@@ -55,7 +55,7 @@ Logs are written under **`Logs/`** relative to the process **working directory**
 ```bash
 CloudFlareUpdater \
   --zone-id ZONE_ID \
-  --site zaneenders.com \
+  --site example.com \
   --email you@example.com \
   --api-key GLOBAL_API_KEY
 ```
@@ -72,8 +72,8 @@ CloudFlareUpdater \
 ```bash
 CreateCNAMERecord \
   --zone-id ZONE_ID \
-  --site www.zaneenders.com \
-  --target zaneenders.com \
+  --site www.example.com \
+  --target example.com \
   --email you@example.com \
   --api-key GLOBAL_API_KEY
 ```
@@ -102,11 +102,11 @@ Ensures these records exist on Cloudflare (creates or updates; does not delete u
 ```bash
 SyncICloudMailDNS \
   --zone-id ZONE_ID \
-  --domain zaneenders.com \
+  --domain example.com \
   --email you@example.com \
   --api-key GLOBAL_API_KEY \
   --verification-txt "apple-domain=YOUR_CODE" \
-  --dkim-target sig1.dkim.zaneenders.com.at.icloudmailadmin.com
+  --dkim-target sig1.dkim.example.com.at.icloudmailadmin.com
 ```
 
 Or via env (typical with **server-tower** `EnvironmentFile`):

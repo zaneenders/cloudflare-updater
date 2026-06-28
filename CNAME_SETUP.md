@@ -12,24 +12,24 @@ sudo cp .build/release/CreateCNAMERecord /usr/local/bin/
 
 ## Examples (replace placeholders)
 
-**`api.shapetree.org` → `shapetree.org`** (needed for **`https://api.shapetree.org`** with server-tower + Caddy):
+**`api.example.com` → `example.com`** (needed for **`https://api.example.com`** with server-tower + Caddy):
 
 ```bash
 CreateCNAMERecord \
   --zone-id YOUR_ZONE_ID \
-  --site api.shapetree.org \
-  --target shapetree.org \
+  --site api.example.com \
+  --target example.com \
   --email YOUR_CLOUDFLARE_EMAIL \
   --api-key YOUR_GLOBAL_API_KEY
 ```
 
-**`www.shapetree.org` → `shapetree.org`**:
+**`www.example.com` → `example.com`**:
 
 ```bash
 CreateCNAMERecord \
   --zone-id YOUR_ZONE_ID \
-  --site www.shapetree.org \
-  --target shapetree.org \
+  --site www.example.com \
+  --target example.com \
   --email YOUR_CLOUDFLARE_EMAIL \
   --api-key YOUR_GLOBAL_API_KEY
 ```
@@ -43,11 +43,11 @@ CreateCNAMERecord \
 ## Verify
 
 ```bash
-dig api.shapetree.org +short
-dig www.shapetree.org +short
+dig api.example.com +short
+dig www.example.com +short
 ```
 
-Expect the **apex name** (often shown as **`shapetree.org.`** in `dig` output).
+Expect the **apex name** (often shown as **`example.com.`** in `dig` output).
 
 ## Logs
 
