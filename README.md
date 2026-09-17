@@ -23,6 +23,8 @@ docc preview Sources/SyncICloudMailDNS/SyncICloudMailDNS.docc
 
 ## Build
 
+Requires Swift 6.4 or later.
+
 ```bash
 swift build -c release
 # Or a single product:
