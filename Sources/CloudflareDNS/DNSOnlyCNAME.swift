@@ -35,10 +35,10 @@ struct CNAMEChange: Encodable, Equatable {
   let type = "CNAME"
   let name: String
   let content: String
-  let proxied = false
+  let proxied: Bool
   let ttl = 1
 
-  static func plan(name: String, target: String, records: [CNAMERecord]) throws -> CNAMEChange? {
+  static func plan(name: String, target: String, records: [CNAMERecord], proxied: Bool = false) throws -> CNAMEChange? {
     let conflicts = records.filter { ["A", "AAAA", "NS"].contains($0.type) }
     guard conflicts.isEmpty else {
       throw DNSRequestError(errorDescription: "Conflicting DNS records for \(name); no records changed")
@@ -53,16 +53,20 @@ struct CNAMEChange: Encodable, Equatable {
     }
     if let existing = cnames.first,
       existing.content.trimmingCharacters(in: CharacterSet(charactersIn: ".")).caseInsensitiveCompare(target) == .orderedSame,
-      existing.proxied == false
+      existing.proxied == proxied
     {
       return nil
     }
-    return CNAMEChange(name: name, content: target)
+    return CNAMEChange(name: name, content: target, proxied: proxied)
   }
 }
 
 extension CloudFlareAPI {
   public func ensureDNSOnlyCNAME(name: String, target: String, zoneID: String) async throws {
+    try await ensureCNAME(name: name, target: target, zoneID: zoneID, proxied: false)
+  }
+
+  public func ensureCNAME(name: String, target: String, zoneID: String, proxied: Bool) async throws {
     let base = "https://api.cloudflare.com/client/v4/zones/\(zoneID)/dns_records"
     var components = URLComponents(string: base)!
     components.queryItems = [URLQueryItem(name: "name", value: name), URLQueryItem(name: "per_page", value: "100")]
@@ -70,7 +74,7 @@ extension CloudFlareAPI {
     guard records.count < 100 else {
       throw DNSRequestError(errorDescription: "Too many records at this name; no records changed")
     }
-    guard let change = try CNAMEChange.plan(name: name, target: target, records: records) else { return }
+    guard let change = try CNAMEChange.plan(name: name, target: target, records: records, proxied: proxied) else { return }
     let existing = records.first { $0.type == "CNAME" }
     var request = HTTPClientRequest(url: existing.map { base + "/" + $0.id } ?? base)
     request.method = existing == nil ? .POST : .PATCH

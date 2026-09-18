@@ -25,6 +25,9 @@ struct CreateCNAMERecord: AsyncParsableCommand {
   @Option(name: .long, help: "Cloudflare API token scoped to this zone (preferred)")
   var apiToken: String = ProcessInfo.processInfo.environment["CLOUDFLARE_API_TOKEN"] ?? ""
 
+  @Flag(name: .long, help: "Enable the Cloudflare proxy (leave off for certificate validation)")
+  var proxied = false
+
   static let configuration: CommandConfiguration = CommandConfiguration(
     commandName: "cname",
     usage: """
@@ -46,7 +49,7 @@ struct CreateCNAMERecord: AsyncParsableCommand {
     let api = apiToken.isEmpty
       ? CloudFlareAPI(email: email, apiKey: apiKey, logFile: logFile)
       : CloudFlareAPI(apiToken: apiToken, logFile: logFile)
-    try await api.ensureDNSOnlyCNAME(name: site, target: target, zoneID: zoneID)
-    print("DNS-only CNAME ready: \(site) -> \(target)")
+    try await api.ensureCNAME(name: site, target: target, zoneID: zoneID, proxied: proxied)
+    print("\(proxied ? "Proxied" : "DNS-only") CNAME ready: \(site) -> \(target)")
   }
 }
