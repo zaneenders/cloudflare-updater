@@ -24,6 +24,7 @@ let package = Package(
       from: "2.77.0"),
   ],
   targets: [
+    .testTarget(name: "CloudflareDNSTests", dependencies: ["CloudflareDNS"]),
     .target(
       name: "CloudflareLogging",
       dependencies: [

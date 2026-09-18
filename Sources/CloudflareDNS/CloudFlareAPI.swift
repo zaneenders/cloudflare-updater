@@ -8,10 +8,19 @@ public struct CloudFlareAPI {
   public let email: String
   public let apiKey: String
   public let logFile: FilePath
+  public let apiToken: String?
 
   public init(email: String, apiKey: String, logFile: FilePath) {
+    self.apiToken = nil
     self.email = email
     self.apiKey = apiKey
+    self.logFile = logFile
+  }
+
+  public init(apiToken: String, logFile: FilePath) {
+    self.email = ""
+    self.apiKey = ""
+    self.apiToken = apiToken
     self.logFile = logFile
   }
 
@@ -289,9 +298,13 @@ public struct CloudFlareAPI {
     }
   }
 
-  private func addAuthHeaders(_ req: inout HTTPClientRequest) {
-    req.headers.add(name: "X-Auth-Email", value: email)
-    req.headers.add(name: "X-Auth-Key", value: apiKey)
+  func addAuthHeaders(_ req: inout HTTPClientRequest) {
+    if let apiToken {
+      req.headers.add(name: "Authorization", value: "Bearer \(apiToken)")
+    } else {
+      req.headers.add(name: "X-Auth-Email", value: email)
+      req.headers.add(name: "X-Auth-Key", value: apiKey)
+    }
     req.headers.add(name: "Content-Type", value: "application/json")
   }
 }
